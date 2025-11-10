@@ -5,7 +5,7 @@ import os
 
 # TRAINING CONFIGURATION
 num_epochs = 10
-save_dir = "checkpoints"
+save_dir = "~/kliebengrp/checkpoints"
 os.makedirs(save_dir, exist_ok=True)
 
 # TRAINING LOOP
@@ -28,7 +28,6 @@ for epoch in range(num_epochs):
     print(f"Epoch [{epoch+1}/{num_epochs}] - Loss: {avg_loss:.4f}")
 
     # inside your training loop
-    save_dir = "checkpoints"
     os.makedirs(save_dir, exist_ok=True)
 
     # after each epoch

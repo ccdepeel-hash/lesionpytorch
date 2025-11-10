@@ -17,9 +17,9 @@ from PIL import Image
 # to see if worked, ls dataset 
 # open dataset/images (folder) | drag relevant relevant images in. | open dataset/masks (folder)| put relevant images in. drag/drop
 
-# PATHING **add on additional code here later to make adjusting directories easier
-image_dir = "~/dataset/images"
-mask_dir = "~/dataset/masks"
+# PATHING **hardcoded for cluster currently
+image_dir = "~/kliebengrp/inputs/images"
+mask_dir = "~/kliebengrp/inputs/masks"
 
 # TRANSFORMS
 # clarify values and maybe need to adjust? purpose of them
