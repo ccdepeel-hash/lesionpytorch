@@ -5,7 +5,7 @@ import os
 
 # TRAINING CONFIGURATION
 num_epochs = 10
-save_dir = "~/kliebengrp/checkpoints"
+save_dir = os.path.expanduser("~/kliebengrp/checkpoints")
 os.makedirs(save_dir, exist_ok=True)
 
 # TRAINING LOOP
