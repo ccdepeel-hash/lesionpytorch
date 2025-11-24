@@ -46,9 +46,9 @@ class LesionDataset(Dataset):
         self.mask_dir = mask_dir
         self.transform_img = transform_img
         self.transform_mask = transform_mask
-        self.image_filenames = sorted(os.listdir(image_dir))
-        self.mask_filenames = sorted(os.listdir(mask_dir))
-        
+        self.image_filenames = sorted([f for f in os.listdir(image_dir) if not f.startswith('.')])
+        self.mask_filenames = sorted([f for f in os.listdir(mask_dir) if not f.startswith('.')])
+
         assert len(self.image_filenames) == len(self.mask_filenames), "Images and masks counts do not match"
     
     def __len__(self):
