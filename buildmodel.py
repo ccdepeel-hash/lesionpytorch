@@ -18,8 +18,8 @@ from PIL import Image
 # open dataset/images (folder) | drag relevant relevant images in. | open dataset/masks (folder)| put relevant images in. drag/drop
 
 # PATHING **hardcoded for cluster currently
-image_dir = "~/kliebengrp/inputs/images"
-mask_dir = "~/kliebengrp/inputs/masks"
+image_dir = "~/kliebengrp/input/images"
+mask_dir = "~/kliebengrp/input/masks"
 
 # TRANSFORMS
 # clarify values and maybe need to adjust? purpose of them
