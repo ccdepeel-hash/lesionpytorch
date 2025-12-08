@@ -23,7 +23,7 @@ mask_dir = "~/kliebengrp/input/masks"
 
 # TRANSFORMS
 # clarify values and maybe need to adjust? purpose of them
-img_size = (2050, 4300)
+img_size = (277, 394)
 
 transform_img = transforms.Compose([
     transforms.Resize(img_size),
