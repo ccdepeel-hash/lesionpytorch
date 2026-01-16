@@ -1,4 +1,6 @@
-# In VS Code: Shift+Cmd+P -> Python: Select Interpreter -> choose your Python 3.9 (same as terminal; see install.sh)
+# buildmodel.py
+# In VS Code: Shift+Cmd+P -> Python: Select Interpreter -> choose your Python 3.11 (plantlesion_gpu2 env)
+
 # IMPORTS
 import torch
 import numpy
@@ -7,48 +9,38 @@ import os
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
+import random
 # dataset, dataloader - from pytorch 2.2.2. for image loading/"batching for training
 # transforms from torchvision - for image processes/converting
-# PIL - opens .jpg and .png files (for directory access)"
+# PIL - opens .jpg and .png files (for directory access)
+# random - for synchronized augmentation transforms
 
-# (vvv maybe reformat this vvv)
-# make sure these directories below exist for images, masks. 
-# mkdir -p dataset/images | mkdir -p dataset/masks
-# to see if worked, ls dataset 
-# open dataset/images (folder) | drag relevant relevant images in. | open dataset/masks (folder)| put relevant images in. drag/drop
-
-# PATHING **hardcoded for cluster currently
+# PATHING
+# Hardcoded for cluster - works for all users with ~ expansion
 image_dir = "~/kliebengrp/input/images"
 mask_dir = "~/kliebengrp/input/masks"
 
-# TRANSFORMS
-# clarify values and maybe need to adjust? purpose of them
+# Ensure directories expand correctly (important for "~")
+image_dir = os.path.expanduser(image_dir)
+mask_dir = os.path.expanduser(mask_dir)
+
+# Image size - reduced from 4300x2700 to single leaf size
 img_size = (277, 394)
 
-transform_img = transforms.Compose([
-    transforms.Resize(img_size),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225])
-])
-
-transform_mask = transforms.Compose([
-    transforms.Resize(img_size),
-    transforms.ToTensor()
-])
-# with established directories, this should "set the target size" of the images to 256x256 pixels and convert them to tensors.
-# it is preparing masks as tensors for segmentation. does not run yet, only defines how it will be processed later... (?)
-
-# DEFINING DATASET
+# DEFINING DATASET WITH AUGMENTATION
+# Updated class with synchronized transforms to artificially expand dataset
+# Images and masks get same geometric transforms (flips, rotations)
+# Only images get color transforms (masks stay binary)
 class LesionDataset(Dataset):
-    def __init__(self, image_dir, mask_dir, transform_img=None, transform_mask=None):
+    def __init__(self, image_dir, mask_dir, img_size=(277, 394), augment=True):
         self.image_dir = image_dir
         self.mask_dir = mask_dir
-        self.transform_img = transform_img
-        self.transform_mask = transform_mask
+        self.img_size = img_size
+        self.augment = augment
+        # Filter out hidden files like .DS_Store
         self.image_filenames = sorted([f for f in os.listdir(image_dir) if not f.startswith('.')])
         self.mask_filenames = sorted([f for f in os.listdir(mask_dir) if not f.startswith('.')])
-
+        
         assert len(self.image_filenames) == len(self.mask_filenames), "Images and masks counts do not match"
     
     def __len__(self):
@@ -58,31 +50,60 @@ class LesionDataset(Dataset):
         img_path = os.path.join(self.image_dir, self.image_filenames[idx])
         mask_path = os.path.join(self.mask_dir, self.mask_filenames[idx])
         
+        # Open images as RGB and masks as grayscale
         image = Image.open(img_path).convert("RGB")
         mask = Image.open(mask_path).convert("L")  # grayscale mask
         
-        if self.transform_img:
-            image = self.transform_img(image)
-        if self.transform_mask:
-            mask = self.transform_mask(mask)
+        # Resize to target size
+        image = transforms.Resize(self.img_size)(image)
+        mask = transforms.Resize(self.img_size)(mask)
+        
+        # Apply synchronized augmentations
+        # These create random variations each epoch to prevent overfitting
+        if self.augment:
+            # Random horizontal flip (50% chance)
+            if random.random() > 0.5:
+                image = transforms.functional.hflip(image)
+                mask = transforms.functional.hflip(mask)
+            
+            # Random vertical flip (50% chance)
+            if random.random() > 0.5:
+                image = transforms.functional.vflip(image)
+                mask = transforms.functional.vflip(mask)
+            
+            # Random rotation (same angle for both image and mask)
+            angle = random.uniform(-45, 45)
+            image = transforms.functional.rotate(image, angle)
+            mask = transforms.functional.rotate(mask, angle)
+            
+            # Color jitter (only on image, not mask!)
+            # Varies brightness, contrast, saturation, hue to simulate different lighting
+            image = transforms.ColorJitter(
+                brightness=0.2,
+                contrast=0.2,
+                saturation=0.2,
+                hue=0.05
+            )(image)
+        
+        # Convert to tensors
+        image = transforms.ToTensor()(image)
+        mask = transforms.ToTensor()(mask)
+        
+        # Normalize image only (using ImageNet stats)
+        # These mean/std values are standard for pretrained models
+        image = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                    std=[0.229, 0.224, 0.225])(image)
         
         return image, mask
-    
-#testing
 
 # DATALOADER + MODEL SETUP
-# importing models sub-package. move to top of code?
+# importing models sub-package for DeepLabV3
 from torchvision import models
 import torch.nn as nn
 
-# Ensure directories expand correctly (important for "~")
-#**clarify further; needed?
-image_dir = os.path.expanduser(image_dir)
-mask_dir = os.path.expanduser(mask_dir)
-
-# Initialize dataset and dataloader
-dataset = LesionDataset(image_dir, mask_dir, transform_img, transform_mask)
-dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
+# Initialize dataset and dataloader with augmentation enabled
+dataset = LesionDataset(image_dir, mask_dir, img_size=img_size, augment=True)
+dataloader = DataLoader(dataset, batch_size=4, shuffle=True)  # 16 images / 4 batches = 4 steps per epoch
 
 # Check a batch (optional but highly recommended)
 images, masks = next(iter(dataloader))
@@ -90,52 +111,51 @@ print(f"Image batch shape: {images.shape}")
 print(f"Mask batch shape: {masks.shape}")
 
 # MODEL DEFINITION
-# Segementation network. Using pretrained model from torchvision (DeepLabV3 (DL3) with a ResNet-50 backbone)
-# creates and loads DeepLabV3 neural network (pretrained weights)
+# Segmentation network. Using pretrained model from torchvision (DeepLabV3 (DL3) with a ResNet-50 backbone)
+# creates and loads DeepLabV3 neural network (pretrained weights from ImageNet/COCO)
 model = models.segmentation.deeplabv3_resnet50(weights='DEFAULT')
 
 # Adjust classifier for single output class (lesion vs background)
-# "The pretrained model has 21 classes (for COCO/VOC), we change it to 1"
+# The pretrained model has 21 classes (for COCO/VOC), we change it to 1
 model.classifier[4] = nn.Conv2d(256, 1, kernel_size=1)
 
 # Optional: also adjust auxiliary classifier if using it
 if model.aux_classifier is not None:
     model.aux_classifier[4] = nn.Conv2d(256, 1, kernel_size=1)
 
-# Move to GPU if available; for HPC cluster... 
-# may need to tweak install so it installs GPU version of pytorch.
+# Move to GPU if available
+# For HPC cluster - should detect CUDA GPU automatically
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
 
 print(f"Model moved to: {device}")
 
 # LOSS FUNCTION + OPTIMIZER SETUP
-# "For segmentation with binary masks, we use BCEWithLogitsLoss (binary cross entropy with sigmoid)"
-# model attempting to predict segmentation mask from existing image_dir
+# For segmentation with binary masks, we use BCEWithLogitsLoss (binary cross entropy with sigmoid)
+# Model attempting to predict segmentation mask from existing image_dir
 criterion = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
-# TEST FORWARD PASS 
-# checking that everything runs. send input image/masks to same device as model. (CPU/GPU/MPS)
+# TEST FORWARD PASS
+# Checking that everything runs. Send input image/masks to same device as model. (CPU/GPU)
 images = images.to(device)
 masks = masks.to(device)
 
 # torch.no_grad(): tells pytorch not to compute gradients. Not training yet, just testing (memory save)
-# sending images through DL3; out is main output in DL3
+# Sending images through DL3; 'out' is main output in DL3
 with torch.no_grad():
     outputs = model(images)['out']
-    print(f"Output shape: {outputs.shape}")  # should be [batch_size, 1, 256, 256]
+    print(f"Output shape: {outputs.shape}")  # should be [batch_size, 1, 277, 394]
 
 # SAVE CHECKPOINT SETUP
-# folder creation if it doesn't exist. saving model's weights (learned parameters) into file inside folder
-# if model crashes during training, can reload model with files in folder... no need to retrain
-# .pth file used to give model without re-training it. these are weight values, not output.
-# "torch.save(model.state)dict(), f"checkpoints/lesion_epoch{epoch+1}.pth")" used if we want new checkpoint for every epoch/full pass.
-# script overwritten every time with new values after each run.
+# Folder creation if it doesn't exist. Saving model's weights (learned parameters) into file inside folder
+# If model crashes during training, can reload model with files in folder... no need to retrain
+# .pth file used to give model without re-training it. These are weight values, not output.
+# This is just the INITIAL checkpoint - actual training checkpoints saved by runmodel.py
 os.makedirs("checkpoints", exist_ok=True)
 torch.save(model.state_dict(), "checkpoints/lesion_model_init.pth")
 print("Initial model saved successfully.")
-# ~/python--pytorch/lesionML/checkpoints for location of .pth 
 
 # make objects importable by other scripts
+# runmodel.py imports these to continue training
 __all__ = ["model", "dataloader", "criterion", "optimizer", "device"]

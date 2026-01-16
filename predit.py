@@ -20,7 +20,7 @@ model.eval()
 
 # IMAGE TRANSFORM (same as training)
 transform_img = transforms.Compose([
-    transforms.Resize((2050, 4300)), # from 256, 256 to (2050, 4300) (avg image size, eyeballed it)
+    transforms.Resize((277, 394)), # from 256, 256 to (2050, 4300), to 277 x 394. (avg image size, eyeballed it)
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
