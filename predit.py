@@ -18,7 +18,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 # SET UP MODEL ARCHITECTURE (same as buildmodel.py)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = models.segmentation.deeplabv3_resnet50(weights=None)  # No pretrained weights
+model = models.segmentation.deeplabv3_resnet50(weights='DEFAULT')  # Load with pretrained structure
 
 # Adjust classifier for single output class (lesion vs background)
 model.classifier[4] = nn.Conv2d(256, 1, kernel_size=1)
