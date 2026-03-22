@@ -8,12 +8,12 @@ num_epochs = 30
 save_dir = os.path.expanduser("~/kliebengrp/checkpoints")
 os.makedirs(save_dir, exist_ok=True)
 
-# LOAD PREVIOUS CHECKPOINT IF IT EXISTS
+# LOAD PREVIOUS CHECKPOINT IF IT EXISTS; line 16 enables cpu/gpu. 
 checkpoint_path = os.path.join(save_dir, "lesion_latest.pth")
 start_epoch = 0
 if os.path.exists(checkpoint_path):
     print(f"Loading checkpoint from {checkpoint_path}")
-    model.load_state_dict(torch.load(checkpoint_path))
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     print("Resuming training from previous checkpoint!")
 else:
     print("No checkpoint found, starting from pretrained weights")
