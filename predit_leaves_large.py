@@ -152,14 +152,14 @@ with torch.no_grad():
         print(f"  Stitching {len(predictions)} predictions...")
         full_mask = stitch_predictions(predictions, original_size, PATCH_SIZE, STRIDE)
         
-        # Threshold mask
+        # Threshold mask - ensure pure binary (0 or 1)
         mask_binary = (full_mask > 0.5).astype(np.uint8)
-        
-        # Save binary mask
-        mask_img = Image.fromarray((mask_binary * 255).astype(np.uint8))
+
+        # Ensure only 0 or 255 values (no grays)
+        mask_img = Image.fromarray(mask_binary * 255, mode='L')
         mask_save_path = os.path.join(output_dir, f"mask_{filename}")
         mask_img.save(mask_save_path)
-        
+                
         # Create and save overlay visualization
         fig, axes = plt.subplots(1, 3, figsize=(20, 7))
         
